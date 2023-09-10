@@ -1,0 +1,13 @@
+#when we try run script in Powershell ISE
+Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn
+
+$ExchangeServer=Get-ExchangeServer |select fqdn
+$result=@()
+$result.Clear()
+foreach ($server in $ExchangeServer){
+    $newObject=""|select-object ExServer,ExVersion
+    $newObject.ExServer=$server.Fqdn
+    $newObject.ExVersion=Invoke-Command -ComputerName $server.Fqdn -ScriptBlock {(Get-Command Exsetup.exe|select -ExpandProperty FileVersionInfo).productversion}
+    $result+=$newObject
+}
+$result|Sort-Object Exversion,ExServer -Descending
