@@ -1,0 +1,120 @@
+#----------------------------------------------------------------------
+#Author    : MJBCT / Marcin Jędorowicz
+#Data      : 2022-09-05
+#Version   : 1.0.0
+#CopyRight : MJBCT / Marcin Jędorowicz
+#----------------------------------------------------------------------
+
+Function Get-MailboxPercentUsage([string]$ExchangeServer="", $logFile=""){
+if($ExchangeServer -ne ""){
+    Try{
+        $MPU_Session = New-PSSession -name MPU_Session -ConfigurationName Microsoft.Exchange -ConnectionUri ("http://" + $ExchangeServer + "/Powershell/") -Authentication Kerberos
+        Import-PSSession $MPU_Session
+    }
+    Catch{
+        Write-Host "Cannot connect to "$ExchangeServer". Try tu use Full Qualified Domain Name Exchange Server"
+        if($logfile -ne ""){
+            $ErrorMessage = $_.Exception.Message
+            $FailedItem = $_.Exception.ItemName
+            (get-date).Tostring() + ‘ ‘ + $errorMessage | Out-file $logfile -append 
+            (get-date).Tostring() + ‘ ‘ + $FailedItem | Out-file $logfile -append 
+           }
+        else{
+            $Error.Clear()
+        }
+    }
+}
+
+$mailboxs= Get-Mailbox
+
+$lista = @()
+$lista.Clear()
+
+foreach($mailbox in $mailboxs){
+$newObject=""|select SamAccountName, WindowsEmailAddress, MailboxUsedBytes, MailboxLimitsBytes, MailboxUsedGB, MailboxLimitGB, MailboxPercentUtilization
+
+    if($mailbox.UseDatabaseQuotaDefaults -eq $true){
+    try{
+        [string] $mailbox_usage=(get-mailboxstatistics $mailbox.DistinguishedName).TotalItemSize.value
+        [string] $mailbox_limits=(Get-MailboxDatabase $mailbox.Database).ProhibitSendQuota
+
+        $newObject.SamAccountName= $mailbox.SamAccountName
+        $newObject.WindowsEmailAddress= $mailbox.WindowsEmailAddress
+        $newObject.MailboxUsedBytes= ($mailbox_usage.substring($mailbox_usage.indexof("(")+1,$mailbox_usage.indexof(" bytes")-($mailbox_usage.indexof("(")+1))).Replace(',','')
+        $newObject.MailboxLimitsBytes= ($mailbox_limits.substring($mailbox_limits.indexof("(")+1,$mailbox_limits.indexof(" bytes")-($mailbox_limits.indexof("(")+1))).Replace(',','')
+        $newObject.MailboxUsedGB=[math]::Round($newObject.MailboxUsedBytes / 1GB,2)
+        $newObject.MailboxLimitGB= [math]::Round($newObject.MailboxLimitsBytes / 1GB,2)
+        $newObject.MailboxPercentUtilization= [math]::Round(($newObject.MailboxUsedGB/$newObject.MailboxLimitGB)*100,2)
+
+        $lista +=$newObject
+    }
+    catch{
+        if($logfile -ne ""){
+            $ErrorMessage = $_.Exception.Message
+            $FailedItem = $_.Exception.ItemName
+            (get-date).tostring() + ' ' + $mailbox.SamAccountName | Out-file $logfile -append 
+            (get-date).Tostring() + ‘ ‘ + $errorMessage | Out-file $logfile -append 
+            (get-date).Tostring() + ‘ ‘ + $FailedItem | Out-file $logfile -append 
+           }
+        else{
+            $Error.Clear()
+        }
+    }
+    }
+    else{
+    try{
+        [string] $mailbox_usage=(get-mailboxstatistics $mailbox.DistinguishedName).TotalItemSize.value
+        [string] $mailbox_limits=($mailbox).ProhibitSendQuota
+
+        $newObject.SamAccountName= $mailbox.SamAccountName
+        $newObject.WindowsEmailAddress= $mailbox.WindowsEmailAddress
+        $newObject.MailboxUsedBytes= ($mailbox_usage.substring($mailbox_usage.indexof("(")+1,$mailbox_usage.indexof(" bytes")-($mailbox_usage.indexof("(")+1))).Replace(',','')
+        $newObject.MailboxUsedGB=[math]::Round($newObject.MailboxUsedBytes / 1GB,2)
+        if($mailbox_limits -eq "Unlimited"){
+            $newObject.MailboxLimitsBytes= "Unlimited"
+            $newObject.MailboxLimitGB= "Unlimited"
+            $newObject.MailboxPercentUtilization= "Unlimited"
+        }
+        else{
+            $newObject.MailboxLimitsBytes= ($mailbox_limits.substring($mailbox_limits.indexof("(")+1,$mailbox_limits.indexof(" bytes")-($mailbox_limits.indexof("(")+1))).Replace(',','')
+            $newObject.MailboxLimitGB= [math]::Round($newObject.MailboxLimitsBytes / 1GB,2)
+            $newObject.MailboxPercentUtilization= [math]::Round(($newObject.MailboxUsedGB/$newObject.MailboxLimitGB)*100,2)
+        }
+        $lista +=$newObject
+    }
+    catch{
+        if($logfile -ne ""){
+            $ErrorMessage = $_.Exception.Message
+            $FailedItem = $_.Exception.ItemName
+            (get-date).tostring() + ' ' + $mailbox.SamAccountName
+            (get-date).Tostring() + ‘ ‘ + $errorMessage | Out-file $logfile -append 
+            (get-date).Tostring() + ‘ ‘ + $FailedItem | Out-file $logfile -append 
+           }
+        else{
+            $Error.Clear()
+        }
+    }
+    }
+}
+$lista
+if($ExchangeServer -ne ""){
+    try{
+        Remove-PSSession -name MPU_Session
+    }
+    catch{
+        write-host "Something went wrong when trying close session."
+        if($logfile -ne ""){
+            $ErrorMessage = $_.Exception.Message
+            $FailedItem = $_.Exception.ItemName
+            (get-date).Tostring() + ‘ ‘ + $errorMessage | Out-file $logfile -append 
+            (get-date).Tostring() + ‘ ‘ + $FailedItem | Out-file $logfile -append 
+           }
+        else{
+            $Error.Clear()
+        }
+    }
+}
+}
+
+#using function
+Get-MailboxPercentUsage -ExchangeServer Exchange.onmicrosoft.com -logFile C:\log.txt|sort-object MailboxPercentUtilization -Descending|select -First 20|ft -AutoSize
