@@ -1,3 +1,9 @@
+#----------------------------------------------------------------------
+#Author    : MJBCT / Marcin Jędorowicz
+#Data      : 2022-09-05
+#Version   : 1.0.0
+#CopyRight : MJBCT / Marcin Jędorowicz
+#----------------------------------------------------------------------
 #when we try run script in Powershell ISE
 Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn
 
