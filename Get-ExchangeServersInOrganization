@@ -1,0 +1,18 @@
+#when using Powershell ISE we must add Snapin for Exchange.
+Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn
+
+# Find Mailbox Server Roles
+$Servers = Get-ExchangeServer
+
+# Print Servername and IP
+$resultlist=@()
+foreach ($Server in $Servers) {
+    $newObject=""|select FQDN,IPAddress,ServerRole,AdminDisplayVersion,Edition
+    $newObject.FQDN = $Server.Fqdn
+    $newObject.IPAddress = (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter IPEnabled=TRUE -ComputerName $Server.fqdn |Select-Object -Property IPAddress).ipaddress
+    $newObject.ServerRole = $Server.ServerRole
+    $newObject.AdminDisplayVersion = $Server.AdminDisplayVersion
+    $newObject.Edition = $Server.Edition
+    $ResultList +=$newObject
+}
+$resultlist|Sort-Object FQDN|ft *
