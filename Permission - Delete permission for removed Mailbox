@@ -1,0 +1,29 @@
+#Script described how remove permission for deleted mailboxes
+
+$exchangeServer="<FQDN Exchange Server>"
+$domainConntroler="<FQDN Domain Controller>"
+$domain="<Domain>*"
+
+$sharedMailboxes=Get-Mailbox -RecipientTypeDetails sharedMailbox -Server $exchangeServer -DomainController $domainConntroler
+$resultList=@()
+$resultList.Clear()
+foreach($sharedMailbox in $sharedMailboxes){
+    Write-Host $sharedMailbox.WindowsEmailAddress
+    foreach($mailbox in (Get-MailboxPermission -Identity $sharedMailbox.WindowsEmailAddress -DomainController $domainConntroler|?{$_.user -like $domain}|select User,AccessRights)){
+            $item=get-mailbox $mailbox.user -DomainController $domainConntroler -ErrorAction SilentlyContinue |select Name,WindowsEmailAddress
+            Write-Host "konto" $item
+            if($item){
+                $newObject=""|select-object SharedMailbox,Permission,UserName,UserEmail
+                $newObject.SharedMailbox = $sharedMailbox
+                $newObject.Permission=$mailbox.AccessRights
+                $newObject.UserName=$item.Name
+                $newObject.UserEmail=$item.WindowsEmailAddress
+                $resultList+=$newObject}
+            else{
+               Write-Host "konto nie istnieje" $mailbox.user
+               Remove-MailboxPermission $sharedMailbox.WindowsEmailAddress -user $mailbox.user -AccessRights FullAccess -DomainController $domainConntroler -InheritanceType all -Confirm:$false 
+            }
+    }
+}
+
+$resultList|Out-GridView
