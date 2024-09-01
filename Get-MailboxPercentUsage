@@ -1,45 +1,54 @@
 #----------------------------------------------------------------------
 #Author    : MJBCT / Marcin Jędorowicz
 #Data      : 2022-09-05
-#Version   : 1.0.0
+#Version   : 1.0.1
 #CopyRight : MJBCT / Marcin Jędorowicz
 #----------------------------------------------------------------------
 
-Function Get-MailboxPercentUsage([string]$ExchangeServer="", $logFile=""){
-if($ExchangeServer -ne ""){
-    Try{
-        $MPU_Session = New-PSSession -name MPU_Session -ConfigurationName Microsoft.Exchange -ConnectionUri ("http://" + $ExchangeServer + "/Powershell/") -Authentication Kerberos
-        Import-PSSession $MPU_Session
-    }
-    Catch{
-        Write-Host "Cannot connect to "$ExchangeServer". Try tu use Full Qualified Domain Name Exchange Server"
-        if($logfile -ne ""){
-            $ErrorMessage = $_.Exception.Message
-            $FailedItem = $_.Exception.ItemName
-            (get-date).Tostring() + ‘ ‘ + $errorMessage | Out-file $logfile -append 
-            (get-date).Tostring() + ‘ ‘ + $FailedItem | Out-file $logfile -append 
-           }
-        else{
-            $Error.Clear()
-        }
-    }
-}
+<#
+.SYNOPSIS
+    Showing list of mailbox with percent utilization.
 
-$mailboxs= Get-Mailbox
+.OUTPUTS
+    SamAccountName
+    WindowsEmailAddress
+    Office
+    Title
+    MailboxUsedBytes
+    MailboxLimitsBytes
+    MailboxUsedGB
+    MailboxLimitGB
+    MailboxPercentUtilization - Sorting-Object
+
+.EXAMPLE
+    Get-MailboxPercentUsage
+
+    Get-MailboxPercentUsage -top 20
+#>
+Function Get-MailboxPercentUsage($ADSamAccountName="",[string]$ExchangeServer=$global:ExServer,$logFile="",$Top=0){
+if($ADSamAccountName -eq ""){
+    $mailboxs= Get-Mailbox -ResultSize unlimited
+}
+else{
+    $mailboxs= Get-Mailbox -ResultSize unlimited|where{$_.SamAccountName -like $ADSamAccountName}
+}
 
 $lista = @()
 $lista.Clear()
 
 foreach($mailbox in $mailboxs){
-$newObject=""|select SamAccountName, WindowsEmailAddress, MailboxUsedBytes, MailboxLimitsBytes, MailboxUsedGB, MailboxLimitGB, MailboxPercentUtilization
+$newObject=""|select SamAccountName, WindowsEmailAddress, Office, Title,MailboxUsedBytes, MailboxLimitsBytes, MailboxUsedGB, MailboxLimitGB, MailboxPercentUtilization
 
     if($mailbox.UseDatabaseQuotaDefaults -eq $true){
     try{
         [string] $mailbox_usage=(get-mailboxstatistics $mailbox.DistinguishedName).TotalItemSize.value
         [string] $mailbox_limits=(Get-MailboxDatabase $mailbox.Database).ProhibitSendQuota
+        
 
         $newObject.SamAccountName= $mailbox.SamAccountName
         $newObject.WindowsEmailAddress= $mailbox.WindowsEmailAddress
+        $newObject.Office= $mailbox.Office
+        $newObject.Title= (get-aduser $mailbox.samaccountname -Properties title).title
         $newObject.MailboxUsedBytes= ($mailbox_usage.substring($mailbox_usage.indexof("(")+1,$mailbox_usage.indexof(" bytes")-($mailbox_usage.indexof("(")+1))).Replace(',','')
         $newObject.MailboxLimitsBytes= ($mailbox_limits.substring($mailbox_limits.indexof("(")+1,$mailbox_limits.indexof(" bytes")-($mailbox_limits.indexof("(")+1))).Replace(',','')
         $newObject.MailboxUsedGB=[math]::Round($newObject.MailboxUsedBytes / 1GB,2)
@@ -67,6 +76,8 @@ $newObject=""|select SamAccountName, WindowsEmailAddress, MailboxUsedBytes, Mail
         [string] $mailbox_limits=($mailbox).ProhibitSendQuota
 
         $newObject.SamAccountName= $mailbox.SamAccountName
+        $newObject.Office= $mailbox.Office
+        $newObject.Title= (get-aduser $mailbox.samaccountname -Properties title).title
         $newObject.WindowsEmailAddress= $mailbox.WindowsEmailAddress
         $newObject.MailboxUsedBytes= ($mailbox_usage.substring($mailbox_usage.indexof("(")+1,$mailbox_usage.indexof(" bytes")-($mailbox_usage.indexof("(")+1))).Replace(',','')
         $newObject.MailboxUsedGB=[math]::Round($newObject.MailboxUsedBytes / 1GB,2)
@@ -96,8 +107,13 @@ $newObject=""|select SamAccountName, WindowsEmailAddress, MailboxUsedBytes, Mail
     }
     }
 }
-$lista
-if($ExchangeServer -ne ""){
+If($Top -eq 0){
+    return $lista|Sort-Object MailboxPercentUtilization
+}
+else{
+    return $lista|Sort-Object MailboxPercentUtilization| select -First $Top}
+
+if((Get-PSSession|where{$_.name -like "MPU_Session"})){
     try{
         Remove-PSSession -name MPU_Session
     }
