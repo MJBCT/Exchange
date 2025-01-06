@@ -1,0 +1,14 @@
+When creating objects in Exchange and cannot set the location of the created object (OU - Organization Units)
+
+This means that the default value is set to display 500 items. You need to change the configuration file responsible for displaying the number of items
+
+We must log in to Exchange server and find the location C:\Program Files\Microsoft\Exchange Server\V15\ClientAccess\ecp next in the web.config file we add settings for the list of displayed objects
+
+</appSettings>
+...
+<!-- allows the OU picker during placing a new mailbox in its designated Organizational Unit to retrieve all OUs - default value is 500 -->
+<add key="GetListDefaultResultSize" value="2000" />
+...
+</appSettings>
+
+If the list of objects still cannot be displayed, we must restart IIS service on the server or increase the counter and restart IIS.
